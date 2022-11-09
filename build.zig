@@ -1,10 +1,15 @@
+const deps = @import("deps.zig");
 const std = @import("std");
 
-pub fn build(b: *std.build.Builder) void {
+pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
     const exe = b.addExecutable("mastty", "src/main.zig");
+    exe.linkLibC();
+    exe.linkSystemLibrary("ssl");
+    exe.linkSystemLibrary("crypto");
+    deps.addAllTo(exe);
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();

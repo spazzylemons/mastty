@@ -1,0 +1,6 @@
+id: u9s15qqxid8ydhn4q7yjbg6ce0o80jk1yiutym5emw375dx6
+name: mastty
+license: GPL3
+description: terminal client for mastodon instances
+root_dependencies:
+  - src: git https://github.com/truemedian/hzzp
