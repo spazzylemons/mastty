@@ -9,6 +9,7 @@ pub fn build(b: *std.build.Builder) !void {
     exe.linkLibC();
     exe.linkSystemLibrary("ssl");
     exe.linkSystemLibrary("crypto");
+    exe.linkSystemLibrary("readline");
     deps.addAllTo(exe);
     exe.setTarget(target);
     exe.setBuildMode(mode);

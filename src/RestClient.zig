@@ -14,6 +14,8 @@ ssl: ?openssl.SSL = null,
 socket: std.net.Stream = undefined,
 /// An owned copy of the instance name.
 instance: [:0]const u8,
+/// Our authorization key, borrowed reference from config file.
+authorization: ?[]const u8 = null,
 
 pub fn init(allocator: std.mem.Allocator, instance: []const u8) !RestClient {
     const instance_copy = try allocator.dupeZ(u8, instance);
@@ -71,16 +73,25 @@ fn invalidateSsl(self: *RestClient) void {
     }
 }
 
-/// Make a GET request to a URL.
-pub fn get(self: *RestClient, url: []const u8) !std.json.ValueTree {
+fn request(self: *RestClient, method: []const u8, url: []const u8, body: ?[]const u8) ![]const u8 {
     const ssl = try self.getSsl();
     errdefer self.invalidateSsl();
 
     var buffer: [4096]u8 = undefined;
     var client = hzzp.base.client.create(&buffer, ssl.reader(), ssl.writer());
-    try client.writeStatusLine("GET", url);
+    try client.writeStatusLine(method, url);
     try client.writeHeaderValue("Host", self.instance);
+    if (self.authorization) |auth| {
+        try client.writeHeaderFormat("Authorization", "Bearer {s}", .{auth});
+    }
+    if (body) |b| {
+        try client.writeHeaderValue("Content-Type", "application/json");
+        try client.writeHeaderFormat("Content-Length", "{}", .{b.len});
+    }
     try client.finishHeaders();
+    if (body) |b| {
+        try client.writePayload(b);
+    }
 
     var payload_buffer = std.ArrayList(u8).init(self.allocator);
     defer payload_buffer.deinit();
@@ -89,6 +100,7 @@ pub fn get(self: *RestClient, url: []const u8) !std.json.ValueTree {
         switch (event) {
             .status => |status| {
                 if (status.code != 200) {
+                    try std.io.getStdErr().writer().print("HTTP status code {}\n", .{status.code});
                     return error.StatusCode;
                 }
             },
@@ -101,8 +113,34 @@ pub fn get(self: *RestClient, url: []const u8) !std.json.ValueTree {
         }
     }
 
-    var parser = std.json.Parser.init(self.allocator, true);
-    defer parser.deinit();
+    return payload_buffer.toOwnedSlice();
+}
 
-    return try parser.parse(payload_buffer.items);
+/// Make a GET request to a URL.
+pub fn get(self: *RestClient, comptime T: type, url: []const u8) !T {
+    var response = try self.request("GET", url, null);
+    defer self.allocator.free(response);
+
+    var stream = std.json.TokenStream.init(response);
+    return try std.json.parse(T, &stream, .{
+        .allocator = self.allocator,
+        .ignore_unknown_fields = true,
+    });
+}
+
+/// Make a POST request to a URL.
+pub fn post(self: *RestClient, comptime T: type, url: []const u8, value: anytype) !T {
+    var request_buffer = std.ArrayList(u8).init(self.allocator);
+    defer request_buffer.deinit();
+
+    try std.json.stringify(value, .{}, request_buffer.writer());
+
+    var response = try self.request("POST", url, request_buffer.items);
+    defer self.allocator.free(response);
+
+    var stream = std.json.TokenStream.init(response);
+    return try std.json.parse(T, &stream, .{
+        .allocator = self.allocator,
+        .ignore_unknown_fields = true,
+    });
 }
