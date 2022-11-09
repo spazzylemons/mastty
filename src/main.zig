@@ -101,6 +101,10 @@ pub fn main() !void {
     var rest = try RestClient.init(allocator, config.instance.?);
     defer rest.deinit();
 
+    // TODO use verify_credentials to refresh credentials if needed
+    // const Foo = struct {};
+    // _ = try rest.get(Foo, "/api/v1/apps/verify_credentials");
+
     // if we don't have a client ID or client secret, get one
     if (config.client_id == null or config.client_secret == null) {
         var app = try rest.post(entities.Application, "/api/v1/apps", .{
@@ -158,8 +162,16 @@ pub fn main() !void {
 
     rest.authorization = config.access_token.?;
 
-    const Foo = struct {};
-    _ = try rest.get(Foo, "/api/v1/apps/verify_credentials");
+    const status = try readline.line(allocator, "status to post? ");
+    defer allocator.free(status);
+    if (status.len != 0) {
+        const Foo = struct {};
+        _ = try rest.post(Foo, "/api/v1/statuses", .{
+            .status = status,
+            .media_ids = null,
+            .poll = null,
+        });
+    }
 
     // var foo = try rest.get("/api/v1/timelines/public?limit=2");
     // defer foo.deinit();
