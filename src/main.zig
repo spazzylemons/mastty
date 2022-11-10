@@ -14,13 +14,64 @@
 //! You should have received a copy of the GNU General Public License
 //! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+const clap = @import("clap");
 const Config = @import("Config.zig");
 const entities = @import("entities.zig");
 const readline = @import("readline.zig");
 const RestClient = @import("RestClient.zig");
 const std = @import("std");
 
+fn greetUser(rest: *RestClient) !void {
+    const acct = try rest.get(entities.Account, "/api/v1/accounts/verify_credentials");
+    defer acct.deinit(rest.allocator);
+    try std.io.getStdOut().writer().print("hello, {s}!\n", .{acct.username});
+}
+
+const paramsString =
+    \\-h, --help  Display help and exit.
+    \\
+;
+
+const params = clap.parseParamsComptime(paramsString);
+
+fn getProgramName() []const u8 {
+    if (std.os.argv.len != 0) {
+        return std.mem.span(std.os.argv[0]);
+    } else {
+        return "mastty";
+    }
+}
+
+fn printUsage() !void {
+    const writer = std.io.getStdErr().writer();
+    try writer.print("usage: {s} ", .{getProgramName()});
+    try clap.usage(writer, clap.Help, &params);
+    try writer.writeAll("\n");
+}
+
+fn handleArguments() !void {
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .diagnostic = &diag,
+    }) catch |err| {
+        try diag.report(std.io.getStdErr().writer(), err);
+        try printUsage();
+        try std.io.getStdErr().writer().print("type {s} --help for more information.\n", .{getProgramName()});
+        std.os.exit(1);
+    };
+    defer res.deinit();
+
+    if (res.args.help) {
+        try printUsage();
+        try std.io.getStdErr().writer().writeAll("options:\n");
+        try std.io.getStdErr().writer().writeAll(paramsString);
+        std.os.exit(0);
+    }
+}
+
 pub fn main() !void {
+    try handleArguments();
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
@@ -32,12 +83,7 @@ pub fn main() !void {
     var rest = try config.createRestClient(allocator);
     defer rest.deinit();
 
-    // print a greeting
-    {
-        const acct = try rest.get(entities.Account, "/api/v1/accounts/verify_credentials");
-        defer acct.deinit(allocator);
-        try std.io.getStdOut().writer().print("hello, {s}!\n", .{acct.username});
-    }
+    try greetUser(&rest);
 
     const status = try readline.line(allocator, "status to post? ");
     defer allocator.free(status);
@@ -49,9 +95,4 @@ pub fn main() !void {
             .poll = null,
         });
     }
-
-    // var foo = try rest.get("/api/v1/timelines/public?limit=2");
-    // defer foo.deinit();
-
-    // std.log.info("{}", .{foo.root});
 }

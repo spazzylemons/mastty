@@ -4,3 +4,4 @@ license: GPL3
 description: terminal client for mastodon instances
 root_dependencies:
   - src: git https://github.com/truemedian/hzzp
+  - src: git https://github.com/Hejsil/zig-clap
