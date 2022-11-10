@@ -24,6 +24,35 @@ fn jsonFree(comptime T: type) type {
     };
 }
 
+pub const Account = struct {
+    pub usingnamespace jsonFree(@This());
+
+    id: []const u8,
+    username: []const u8,
+    acct: []const u8,
+    url: []const u8,
+    display_name: []const u8,
+    note: []const u8,
+    avatar: []const u8,
+    avatar_static: []const u8,
+    header: []const u8,
+    header_static: []const u8,
+    locked: bool,
+    emojis: []Emoji,
+    discoverable: bool,
+    created_at: []const u8,
+    last_status_at: []const u8,
+    statuses_count: u64,
+    followers_count: u64,
+    following_count: u64,
+    moved: ?*Account = null,
+    fields: ?[]Field = null,
+    bot: ?bool = null,
+    source: ?Source = null,
+    suspended: ?bool = null,
+    mute_expires_at: ?[]const u8 = null,
+};
+
 pub const Application = struct {
     pub usingnamespace jsonFree(@This());
 
@@ -32,6 +61,33 @@ pub const Application = struct {
     vapid_key: []const u8,
     client_id: []const u8,
     client_secret: []const u8,
+};
+
+pub const Emoji = struct {
+    pub usingnamespace jsonFree(@This());
+
+    shortcode: []const u8,
+    url: []const u8,
+    static_url: []const u8,
+    visible_in_picker: []const u8,
+    category: ?[]const u8 = null,
+};
+
+pub const Field = struct {
+    pub usingnamespace jsonFree(@This());
+
+    name: []const u8,
+    value: []const u8,
+    verified_at: ?[]const u8 = null,
+};
+
+pub const Source = struct {
+    note: []const u8,
+    fields: []Field,
+    privacy: ?enum { public, unlisted, private, direct } = null,
+    sensitive: ?bool = null,
+    language: ?[]const u8 = null,
+    follow_requests_count: ?u64 = null,
 };
 
 pub const Token = struct {

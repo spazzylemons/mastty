@@ -134,10 +134,13 @@ fn request(self: *RestClient, method: []const u8, url: []const u8, body: ?[]cons
 
 /// Make a GET request to a URL.
 pub fn get(self: *RestClient, comptime T: type, url: []const u8) !T {
+    @setEvalBranchQuota(1_000_000);
+
     var response = try self.request("GET", url, null);
     defer self.allocator.free(response);
 
     var stream = std.json.TokenStream.init(response);
+
     return try std.json.parse(T, &stream, .{
         .allocator = self.allocator,
         .ignore_unknown_fields = true,
@@ -146,6 +149,8 @@ pub fn get(self: *RestClient, comptime T: type, url: []const u8) !T {
 
 /// Make a POST request to a URL.
 pub fn post(self: *RestClient, comptime T: type, url: []const u8, value: anytype) !T {
+    @setEvalBranchQuota(1_000_000);
+
     var request_buffer = std.ArrayList(u8).init(self.allocator);
     defer request_buffer.deinit();
 
@@ -155,6 +160,7 @@ pub fn post(self: *RestClient, comptime T: type, url: []const u8, value: anytype
     defer self.allocator.free(response);
 
     var stream = std.json.TokenStream.init(response);
+
     return try std.json.parse(T, &stream, .{
         .allocator = self.allocator,
         .ignore_unknown_fields = true,
