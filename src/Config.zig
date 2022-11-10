@@ -106,7 +106,6 @@ pub fn write(self: Config, temp_allocator: std.mem.Allocator) !void {
 pub fn getInstance(self: *Config, allocator: std.mem.Allocator) ![]const u8 {
     if (self.instance == null) {
         const line = try readline.line(allocator, "what instance? ");
-        if (line.len == 0) return error.EmptyLine;
         self.instance = line;
         try self.write(allocator);
     }
@@ -125,8 +124,8 @@ pub fn getClientInfo(self: *Config, allocator: std.mem.Allocator, rest: *RestCli
 
         // success, insert client id and client secret
         self.client = .{
-            .id = app.client_id,
-            .secret = app.client_secret,
+            .id = app.client_id.?,
+            .secret = app.client_secret.?,
         };
         app.client_id = &.{};
         app.client_secret = &.{};
@@ -157,8 +156,6 @@ pub fn createRestClient(self: *Config, allocator: std.mem.Allocator) !RestClient
         _ = std.os.waitpid(pid, 0);
         const code = try readline.line(allocator, "enter the authorization code from the browser: ");
         defer allocator.free(code);
-        // empty code, quit
-        if (code.len == 0) return error.EmptyLine;
         // get a token
         var token = try rest.post(entities.Token, "/oauth/token", .{
             .client_id = client.id,

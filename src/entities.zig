@@ -58,9 +58,52 @@ pub const Application = struct {
 
     name: []const u8,
     website: ?[]const u8 = null,
-    vapid_key: []const u8,
-    client_id: []const u8,
-    client_secret: []const u8,
+    vapid_key: ?[]const u8 = null,
+    client_id: ?[]const u8 = null,
+    client_secret: ?[]const u8 = null,
+};
+
+pub const Attachment = struct {
+    pub usingnamespace jsonFree(@This());
+
+    id: []const u8,
+    type: enum {
+        unknown,
+        image,
+        gifv,
+        video,
+        audio,
+    },
+    url: []const u8,
+    preview_url: []const u8,
+    remote_url: ?[]const u8 = null,
+    // TODO - probably can't add meta field to serialization because it varies in structure?
+    description: ?[]const u8 = null,
+    blurhash: ?[]const u8 = null,
+};
+
+pub const Card = struct {
+    pub usingnamespace jsonFree(@This());
+
+    url: []const u8,
+    title: []const u8,
+    description: []const u8,
+    type: enum {
+        link,
+        photo,
+        video,
+        rich,
+    },
+    author_name: ?[]const u8 = null,
+    author_url: ?[]const u8 = null,
+    provider_name: ?[]const u8 = null,
+    provider_url: ?[]const u8 = null,
+    html: ?[]const u8 = null,
+    width: ?u64 = null,
+    height: ?u64 = null,
+    image: ?[]const u8 = null,
+    embed_url: ?[]const u8 = null,
+    blurhash: ?[]const u8 = null,
 };
 
 pub const Emoji = struct {
@@ -81,13 +124,92 @@ pub const Field = struct {
     verified_at: ?[]const u8 = null,
 };
 
+pub const History = struct {
+    day: []const u8,
+    uses: []const u8,
+    accounts: []const u8,
+};
+
+pub const Mention = struct {
+    pub usingnamespace jsonFree(@This());
+
+    id: []const u8,
+    username: []const u8,
+    acct: []const u8,
+    url: []const u8,
+};
+
+pub const Poll = struct {
+    pub usingnamespace jsonFree(@This());
+
+    id: []const u8,
+    expires_at: ?[]const u8 = null,
+    expired: bool,
+    multiple: bool,
+    votes_count: u64,
+    voters_count: ?u64 = null,
+    voted: ?bool = null,
+    own_votes: ?[]u64 = null,
+    options: []struct {
+        title: []const u8,
+        votes_count: ?u64 = null,
+    },
+    emojis: []Emoji,
+};
+
 pub const Source = struct {
+    pub usingnamespace jsonFree(@This());
+
     note: []const u8,
     fields: []Field,
-    privacy: ?enum { public, unlisted, private, direct } = null,
+    privacy: ?Visibility = null,
     sensitive: ?bool = null,
     language: ?[]const u8 = null,
     follow_requests_count: ?u64 = null,
+};
+
+pub const Status = struct {
+    pub usingnamespace jsonFree(@This());
+
+    id: []const u8,
+    uri: []const u8,
+    created_at: []const u8,
+    account: Account,
+    content: []const u8,
+    visibility: Visibility,
+    sensitive: bool,
+    spoiler_text: []const u8,
+    media_attachments: []Attachment,
+    application: ?Application = null,
+    mentions: []Mention,
+    tags: []Tag,
+    emojis: []Emoji,
+
+    reblogs_count: u64,
+    favourites_count: u64,
+    replies_count: u64,
+
+    url: ?[]const u8 = null,
+    in_reply_to_id: ?[]const u8 = null,
+    in_reply_to_account_id: ?[]const u8 = null,
+    reblog: ?*Status = null,
+    poll: ?Poll = null,
+    card: ?Card = null,
+    language: ?[]const u8 = null,
+    text: ?[]const u8 = null,
+    favourited: bool,
+    reblogged: bool,
+    muted: bool,
+    bookmarked: bool,
+    pinned: ?bool = null,
+};
+
+pub const Tag = struct {
+    pub usingnamespace jsonFree(@This());
+
+    name: []const u8,
+    url: []const u8,
+    history: ?[]History = null,
 };
 
 pub const Token = struct {
@@ -97,4 +219,11 @@ pub const Token = struct {
     token_type: []const u8,
     scope: []const u8,
     created_at: i64,
+};
+
+pub const Visibility = enum {
+    public,
+    unlisted,
+    private,
+    direct,
 };

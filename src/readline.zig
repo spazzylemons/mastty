@@ -27,5 +27,5 @@ pub fn line(allocator: std.mem.Allocator, prompt: ?[*:0]const u8) ![]const u8 {
         defer c.free(l);
         return try allocator.dupe(u8, std.mem.span(l));
     }
-    return &.{};
+    return error.EOF;
 }

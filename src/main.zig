@@ -21,12 +21,6 @@ const readline = @import("readline.zig");
 const RestClient = @import("RestClient.zig");
 const std = @import("std");
 
-fn greetUser(rest: *RestClient) !void {
-    const acct = try rest.get(entities.Account, "/api/v1/accounts/verify_credentials");
-    defer acct.deinit(rest.allocator);
-    try std.io.getStdOut().writer().print("hello, {s}!\n", .{acct.username});
-}
-
 const paramsString =
     \\-h, --help  Display help and exit.
     \\
@@ -90,16 +84,39 @@ pub fn main() !void {
     var rest = try config.createRestClient(allocator);
     defer rest.deinit();
 
-    try greetUser(&rest);
+    const acct = try rest.get(entities.Account, "/api/v1/accounts/verify_credentials");
+    defer acct.deinit(rest.allocator);
 
-    const status = try readline.line(allocator, "status to post? ");
-    defer allocator.free(status);
-    if (status.len != 0) {
-        const Foo = struct {};
-        _ = try rest.post(Foo, "/api/v1/statuses", .{
-            .status = status,
-            .media_ids = null,
-            .poll = null,
-        });
+    try std.io.getStdOut().writer().print("hello, {s}!\n", .{acct.username});
+
+    // bash ps1-style prompt - username@instance
+    const prompt = try std.fmt.allocPrintZ(allocator, "{s}@{s}> ", .{acct.username, config.instance.?});
+    defer allocator.free(prompt);
+
+    while (true) {
+        const command = readline.line(allocator, prompt) catch |err| switch (err) {
+            // clean exit on EOF
+            error.EOF => break,
+            else => |e| return e,
+        };
+        defer allocator.free(command);
+
+        if (std.mem.eql(u8, command, "exit")) {
+            // if command is exit, then quit
+            break;
+        } else if (std.mem.eql(u8, command, "home")) {
+            // if command is home, then for testing, print three home timeline statuses
+            const statuses = try rest.get([]entities.Status, "/api/v1/timelines/home?limit=3");
+            defer std.json.parseFree([]entities.Status, statuses, .{ .allocator = allocator });
+
+            for (statuses) |status| {
+                try std.io.getStdOut().writer().print("{s} says {s}\n", .{
+                    status.account.url,
+                    status.content,
+                });
+            }
+        } else {
+            // TODO help system
+        }
     }
 }
