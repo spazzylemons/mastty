@@ -15,6 +15,7 @@
 //! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 const std = @import("std");
+const html = @import("html.zig");
 
 fn jsonFree(comptime T: type) type {
     return struct {
@@ -112,7 +113,7 @@ pub const Emoji = struct {
     shortcode: []const u8,
     url: []const u8,
     static_url: []const u8,
-    visible_in_picker: []const u8,
+    visible_in_picker: bool,
     category: ?[]const u8 = null,
 };
 
@@ -202,6 +203,38 @@ pub const Status = struct {
     muted: bool,
     bookmarked: bool,
     pinned: ?bool = null,
+
+    fn printContent(self: Status) !void {
+        const stdout = std.io.getStdOut().writer();
+        try html.renderHtml(self.content, stdout);
+        if (self.media_attachments.len > 0) {
+            try stdout.writeAll("attachments:\n");
+            for (self.media_attachments) |attachment| {
+                try stdout.print("{s}\n", .{attachment.url});
+                if (attachment.description) |desc| {
+                    try stdout.print("- {s}\n", .{desc});
+                }
+            }
+            try stdout.writeAll("\n");
+        }
+        try stdout.print("{} replies, {} favorites, {} boosts\n", .{
+            self.replies_count,
+            self.favourites_count,
+            self.reblogs_count,
+        });
+    }
+
+    /// Print the status.
+    pub fn print(self: Status) !void {
+        const stdout = std.io.getStdOut().writer();
+        if (self.reblog) |rb| {
+            try stdout.print("@{s} boosted @{s}'s toot\n\n", .{rb.account.acct, self.account.acct});
+            try rb.printContent();
+        } else {
+            try stdout.print("@{s} tooted\n\n", .{self.account.acct});
+            try self.printContent();
+        }
+    }
 };
 
 pub const Tag = struct {

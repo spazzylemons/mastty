@@ -105,15 +105,13 @@ pub fn main() !void {
             // if command is exit, then quit
             break;
         } else if (std.mem.eql(u8, command, "home")) {
-            // if command is home, then for testing, print three home timeline statuses
-            const statuses = try rest.get([]entities.Status, "/api/v1/timelines/home?limit=3");
+            // if command is home, then for testing, print 10 home timeline statuses
+            const statuses = try rest.get([]entities.Status, "/api/v1/timelines/home?limit=10");
             defer std.json.parseFree([]entities.Status, statuses, .{ .allocator = allocator });
 
             for (statuses) |status| {
-                try std.io.getStdOut().writer().print("{s} says {s}\n", .{
-                    status.account.url,
-                    status.content,
-                });
+                try status.print();
+                try std.io.getStdOut().writer().writeAll("\n");
             }
         } else {
             // TODO help system
