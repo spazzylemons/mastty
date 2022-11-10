@@ -42,8 +42,8 @@ fn getProgramName() []const u8 {
     }
 }
 
-fn printUsage() !void {
-    const writer = std.io.getStdErr().writer();
+fn printUsage(file: std.fs.File) !void {
+    const writer = file.writer();
     try writer.print("usage: {s} ", .{getProgramName()});
     try clap.usage(writer, clap.Help, &params);
     try writer.writeAll("\n");
@@ -55,22 +55,29 @@ fn handleArguments() !void {
         .diagnostic = &diag,
     }) catch |err| {
         try diag.report(std.io.getStdErr().writer(), err);
-        try printUsage();
+        try printUsage(std.io.getStdErr());
         try std.io.getStdErr().writer().print("type {s} --help for more information.\n", .{getProgramName()});
         std.os.exit(1);
     };
     defer res.deinit();
 
     if (res.args.help) {
-        try printUsage();
-        try std.io.getStdErr().writer().writeAll("options:\n");
-        try std.io.getStdErr().writer().writeAll(paramsString);
+        try printUsage(std.io.getStdOut());
+        try std.io.getStdOut().writer().writeAll("options:\n");
+        try std.io.getStdOut().writer().writeAll(paramsString);
         std.os.exit(0);
     }
 }
 
 pub fn main() !void {
     try handleArguments();
+
+    try std.io.getStdOut().writer().writeAll(
+        \\mastty - Copyright (C) 2022 spazzylemons
+        \\This program comes with ABSOLUTELY NO WARRANTY; see the
+        \\GNU General Public License for more details.
+        \\
+    );
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
     defer _ = gpa.deinit();
