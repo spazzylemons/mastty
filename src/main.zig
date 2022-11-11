@@ -63,7 +63,24 @@ fn handleArguments() !void {
     }
 }
 
+fn printHome(rest: *RestClient) !void {
+    // if command is home, then for testing, print 10 home timeline statuses
+    const statuses = try rest.get([]entities.Status, "/api/v1/timelines/home?limit=10");
+    defer std.json.parseFree([]entities.Status, statuses, .{ .allocator = rest.allocator });
+
+    for (statuses) |status| {
+        try status.print();
+        try std.io.getStdOut().writer().writeAll("\n");
+    }
+}
+
 pub fn main() !void {
+    // we must be in interactive mode
+    if (!std.io.getStdOut().isTty()) {
+        try std.io.getStdErr().writer().writeAll("mastty must be run in interactive mode.\n");
+        std.os.exit(1);
+    }
+
     try handleArguments();
 
     try std.io.getStdOut().writer().writeAll(
@@ -105,14 +122,9 @@ pub fn main() !void {
             // if command is exit, then quit
             break;
         } else if (std.mem.eql(u8, command, "home")) {
-            // if command is home, then for testing, print 10 home timeline statuses
-            const statuses = try rest.get([]entities.Status, "/api/v1/timelines/home?limit=10");
-            defer std.json.parseFree([]entities.Status, statuses, .{ .allocator = allocator });
-
-            for (statuses) |status| {
-                try status.print();
-                try std.io.getStdOut().writer().writeAll("\n");
-            }
+            printHome(&rest) catch |err| {
+                try std.io.getStdErr().writer().print("error: {s}\n", .{ @errorName(err) });
+            };
         } else {
             // TODO help system
         }

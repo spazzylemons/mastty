@@ -40,7 +40,7 @@ pub const Account = struct {
     header_static: []const u8,
     locked: bool,
     emojis: []Emoji,
-    discoverable: bool,
+    discoverable: ?bool = null,
     created_at: []const u8,
     last_status_at: []const u8,
     statuses_count: u64,
@@ -228,7 +228,7 @@ pub const Status = struct {
     pub fn print(self: Status) !void {
         const stdout = std.io.getStdOut().writer();
         if (self.reblog) |rb| {
-            try stdout.print("@{s} boosted @{s}'s toot\n\n", .{rb.account.acct, self.account.acct});
+            try stdout.print("@{s} boosted @{s}'s toot\n\n", .{self.account.acct, rb.account.acct});
             try rb.printContent();
         } else {
             try stdout.print("@{s} tooted\n\n", .{self.account.acct});
