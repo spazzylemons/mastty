@@ -204,20 +204,19 @@ pub const Status = struct {
     bookmarked: bool,
     pinned: ?bool = null,
 
-    fn printContent(self: Status) !void {
-        const stdout = std.io.getStdOut().writer();
-        try html.renderHtml(self.content, stdout);
+    fn printContent(self: Status, writer: anytype) !void {
+        try html.renderHtml(self.content, writer);
         if (self.media_attachments.len > 0) {
-            try stdout.writeAll("attachments:\n");
+            try writer.writeAll("attachments:\n");
             for (self.media_attachments) |attachment| {
-                try stdout.print("{s}\n", .{attachment.url});
+                try writer.print("{s}\n", .{attachment.url});
                 if (attachment.description) |desc| {
-                    try stdout.print("- {s}\n", .{desc});
+                    try writer.print("- {s}\n", .{desc});
                 }
             }
-            try stdout.writeAll("\n");
+            try writer.writeAll("\n");
         }
-        try stdout.print("{} replies, {} favorites, {} boosts\n", .{
+        try writer.print("{} replies, {} favorites, {} boosts\n", .{
             self.replies_count,
             self.favourites_count,
             self.reblogs_count,
@@ -225,14 +224,13 @@ pub const Status = struct {
     }
 
     /// Print the status.
-    pub fn print(self: Status) !void {
-        const stdout = std.io.getStdOut().writer();
+    pub fn print(self: Status, writer: anytype) !void {
         if (self.reblog) |rb| {
-            try stdout.print("@{s} boosted @{s}'s toot\n\n", .{self.account.acct, rb.account.acct});
-            try rb.printContent();
+            try writer.print("@{s} boosted @{s}'s toot\n\n", .{self.account.acct, rb.account.acct});
+            try rb.printContent(writer);
         } else {
-            try stdout.print("@{s} tooted\n\n", .{self.account.acct});
-            try self.printContent();
+            try writer.print("@{s} tooted\n\n", .{self.account.acct});
+            try self.printContent(writer);
         }
     }
 };

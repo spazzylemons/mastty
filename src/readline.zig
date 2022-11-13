@@ -14,9 +14,10 @@
 //! You should have received a copy of the GNU General Public License
 //! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-const c = @cImport({
+pub const c = @cImport({
     @cInclude("stdio.h");
     @cInclude("stdlib.h");
+    @cInclude("readline/history.h");
     @cInclude("readline/readline.h");
 });
 
@@ -28,4 +29,8 @@ pub fn line(allocator: std.mem.Allocator, prompt: ?[*:0]const u8) ![]const u8 {
         return try allocator.dupe(u8, std.mem.span(l));
     }
     return error.EOF;
+}
+
+pub fn addHistory(l: [*:0]const u8) void {
+    c.add_history(l);
 }

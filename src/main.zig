@@ -63,16 +63,18 @@ fn handleArguments() !void {
     }
 }
 
-fn printHome(rest: *RestClient) !void {
+fn printHome(writer: anytype, rest: *RestClient) !void {
     // if command is home, then for testing, print 10 home timeline statuses
     const statuses = try rest.get([]entities.Status, "/api/v1/timelines/home?limit=10");
     defer std.json.parseFree([]entities.Status, statuses, .{ .allocator = rest.allocator });
 
     for (statuses) |status| {
-        try status.print();
-        try std.io.getStdOut().writer().writeAll("\n");
+        try status.print(writer);
+        try writer.writeAll("\n");
     }
 }
+
+const ui = @import("ui.zig");
 
 pub fn main() !void {
     // we must be in interactive mode
@@ -82,13 +84,6 @@ pub fn main() !void {
     }
 
     try handleArguments();
-
-    try std.io.getStdOut().writer().writeAll(
-        \\mastty - Copyright (C) 2022 spazzylemons
-        \\This program comes with ABSOLUTELY NO WARRANTY; see the
-        \\GNU General Public License for more details.
-        \\
-    );
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
     defer _ = gpa.deinit();
@@ -101,30 +96,38 @@ pub fn main() !void {
     var rest = try config.createRestClient(allocator);
     defer rest.deinit();
 
+    try ui.initUi(allocator);
+    defer ui.deinitUi();
+
+    ui.ui.msg.erase();
+
+    try ui.ui.msg.moveCursor(0, 0);
+
+    try ui.ui.msg.writer().writeAll(
+        \\mastty - Copyright (C) 2022 spazzylemons
+        \\This program comes with ABSOLUTELY NO WARRANTY; see the
+        \\GNU General Public License for more details.
+        \\
+    );
+    ui.ui.msg.refresh();
+
     const acct = try rest.get(entities.Account, "/api/v1/accounts/verify_credentials");
     defer acct.deinit(rest.allocator);
 
-    try std.io.getStdOut().writer().print("hello, {s}!\n", .{acct.username});
+    try ui.ui.msg.writer().print("hello, {s}!\n", .{acct.username});
+    ui.ui.msg.refresh();
 
-    // bash ps1-style prompt - username@instance
-    const prompt = try std.fmt.allocPrintZ(allocator, "{s}@{s}> ", .{acct.username, config.instance.?});
-    defer allocator.free(prompt);
-
-    while (true) {
-        const command = readline.line(allocator, prompt) catch |err| switch (err) {
-            // clean exit on EOF
-            error.EOF => break,
-            else => |e| return e,
-        };
+    while (try ui.ui.getLine()) |command| {
         defer allocator.free(command);
 
         if (std.mem.eql(u8, command, "exit")) {
             // if command is exit, then quit
             break;
         } else if (std.mem.eql(u8, command, "home")) {
-            printHome(&rest) catch |err| {
-                try std.io.getStdErr().writer().print("error: {s}\n", .{ @errorName(err) });
+            printHome(ui.ui.msg.writer(), &rest) catch |err| {
+                try ui.ui.msg.writer().print("error: {s}\n", .{ @errorName(err) });
             };
+            ui.ui.msg.refresh();
         } else {
             // TODO help system
         }
