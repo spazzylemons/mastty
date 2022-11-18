@@ -1,119 +1,64 @@
 const std = @import("std");
 
-fn HtmlRenderer(comptime Writer: type) type {
-    return struct {
-        const Self = @This();
+const tidy = @cImport({
+    @cInclude("tidy.h");
+    @cInclude("tidybuffio.h");
+});
 
-        writer: Writer,
+fn renderNode(tdoc: tidy.TidyDoc, node: tidy.TidyNode, writer: anytype) !void {
+    const node_type = tidy.tidyNodeGetType(node);
 
-        remaining_input_ptr: [*]const u8,
-        remaining_input_len: usize,
+    if (node_type == tidy.TidyNode_Text) {
+        var buf = std.mem.zeroes(tidy.TidyBuffer);
+        tidy.tidyBufInit(&buf);
+        defer tidy.tidyBufFree(&buf);
 
-        capture: ?[*]const u8 = null,
-
-        fn next(self: *Self) ?[*]const u8 {
-            if (self.remaining_input_len > 0) {
-                const result = self.remaining_input_ptr;
-                self.remaining_input_ptr += 1;
-                self.remaining_input_len -= 1;
-                return result;
-            }
-            return null;
+        if (tidy.tidyNodeGetValue(tdoc, node, &buf) == tidy.no) {
+            return error.TidyError;
         }
 
-        fn getCapture(self: *Self) ?[]const u8 {
-            if (self.capture) |capture| {
-                self.capture = null;
-                const len = @ptrToInt(self.remaining_input_ptr) - @ptrToInt(capture);
-                return capture[0..len];
-            }
-            return null;
-        }
+        try writer.writeAll(buf.bp[0..buf.size]);
+    }
 
-        fn writeCodepointEntity(self: Self, name: []const u8) !void {
-            if (!std.mem.startsWith(u8, name, "#")) {
-                return error.NotCodepoint;
-            }
-            const int = try std.fmt.parseInt(u21, name[1..], 10);
-            var buf: [4]u8 = undefined;
-            const len = try std.unicode.utf8Encode(int, &buf);
-            try self.writer.writeAll(buf[0..len]);
-        }
+    var child = tidy.tidyGetChild(node);
+    while (child != null) : (child = tidy.tidyGetNext(child)) {
+        try renderNode(tdoc, child, writer);
+    }
 
-        // TODO (?) - rendering does not trim whitespace, handwritten html won't look right
-        // also this probably isn't spec compliant
-        fn render(self: *Self) !void {
-            while (self.next()) |ptr| {
-                switch (ptr[0]) {
-                    '<', '&' => {
-                        if (self.capture != null) {
-                            return error.HtmlError;
-                        }
-                        self.capture = ptr;
-                    },
+    const tag = tidy.tidyNodeGetId(node);
 
-                    '>' => {
-                        const contents = self.getCapture() orelse return error.HtmlError;
-                        if (contents[0] != '<') return error.HtmlError;
-                        const element_type = std.mem.sliceTo(contents[1..contents.len - 1], ' ');
-                        self.capture = null;
-                        if (std.mem.startsWith(u8, element_type, "/")) {
-                            return;
-                        } else {
-                            // don't recurse if '/' at end
-                            if (!std.mem.endsWith(u8, contents, "/>")) {
-                                try self.render();
-                            }
-                            if (std.mem.eql(u8, element_type, "p")) {
-                                // line break at end of <p>
-                                try self.writer.writeAll("\n\n");
-                            } else if (std.mem.eql(u8, element_type, "br")) {
-                                // smaller line break at <br/>
-                                try self.writer.writeAll("\n");
-                            }
-                        }
-                    },
-
-                    ';' => {
-                        const contents = self.getCapture() orelse return error.HtmlError;
-                        if (contents[0] != '&') return error.HtmlError;
-                        const name = contents[1..contents.len - 1];
-                        if (std.mem.eql(u8, name, "amp")) {
-                            try self.writer.writeByte('&');
-                        } else if (std.mem.eql(u8, name, "lt")) {
-                            try self.writer.writeByte('<');
-                        } else if (std.mem.eql(u8, name, "gt")) {
-                            try self.writer.writeByte('>');
-                        } else if (std.mem.eql(u8, name, "quot")) {
-                            try self.writer.writeByte('"');
-                        } else if (std.mem.eql(u8, name, "nbsp")) {
-                            try self.writer.writeByte(' ');
-                        } else {
-                            // try decoding codepoint, fallback to outputting untranslated entity
-                            self.writeCodepointEntity(name) catch {
-                                try self.writer.writeAll(contents);
-                            };
-                        }
-                    },
-
-                    else => |c| {
-                        if (self.capture == null) {
-                            try self.writer.writeByte(c);
-                        }
-                    },
-                }
-            }
-        }
-    };
+    if (tag == tidy.TidyTag_P) {
+        try writer.writeAll("\n\n");
+    } else if (tag == tidy.TidyTag_BR) {
+        try writer.writeAll("\n");
+    }
 }
 
 pub fn renderHtml(input: []const u8, writer: anytype) !void {
-    var renderer = HtmlRenderer(@TypeOf(writer)){
-        .writer = writer,
-        .remaining_input_ptr = input.ptr,
-        .remaining_input_len = input.len,
-    };
-    try renderer.render();
+    const tdoc = tidy.tidyCreate();
+    defer tidy.tidyRelease(tdoc);
+
+    if (tidy.tidyOptSetBool(tdoc, tidy.TidyXhtmlOut, tidy.yes) == tidy.no)
+        return error.TidyError;
+    if (tidy.tidyOptSetBool(tdoc, tidy.TidyBodyOnly, tidy.yes) == tidy.no)
+        return error.TidyError;
+    if (tidy.tidyOptSetBool(tdoc, tidy.TidyShowWarnings, tidy.no) == tidy.no)
+        return error.TidyError;
+    if (tidy.tidyOptSetInt(tdoc, tidy.TidyShowErrors, 0) == tidy.no)
+        return error.TidyError;
+    if (tidy.tidyOptSetBool(tdoc, tidy.TidyQuiet, tidy.yes) == tidy.no)
+        return error.TidyError;
+
+    var inbuf = std.mem.zeroes(tidy.TidyBuffer);
+    tidy.tidyBufInit(&inbuf);
+    defer tidy.tidyBufFree(&inbuf);
+
+    tidy.tidyBufAppend(&inbuf, @intToPtr(?*anyopaque, @ptrToInt(input.ptr)), @intCast(c_uint, input.len));
+    if (tidy.tidyParseBuffer(tdoc, &inbuf) < 0)
+        return error.HtmlError;
+
+    const root = tidy.tidyGetRoot(tdoc);
+    try renderNode(tdoc, root, writer);
 }
 
 test {

@@ -76,7 +76,7 @@ pub const Attachment = struct {
         audio,
     },
     url: []const u8,
-    preview_url: []const u8,
+    preview_url: ?[]const u8 = null,
     remote_url: ?[]const u8 = null,
     // TODO - probably can't add meta field to serialization because it varies in structure?
     description: ?[]const u8 = null,
@@ -126,6 +126,8 @@ pub const Field = struct {
 };
 
 pub const History = struct {
+    pub usingnamespace jsonFree(@This());
+
     day: []const u8,
     uses: []const u8,
     accounts: []const u8,

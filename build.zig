@@ -10,6 +10,7 @@ pub fn build(b: *std.build.Builder) !void {
     exe.linkSystemLibrary("ssl");
     exe.linkSystemLibrary("crypto");
     exe.linkSystemLibrary("readline");
+    exe.linkSystemLibrary("tidy");
     exe.linkSystemLibrary("ncursesw");
     deps.addAllTo(exe);
     exe.setTarget(target);

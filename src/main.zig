@@ -16,10 +16,12 @@
 
 const clap = @import("clap");
 const Config = @import("Config.zig");
+const curses = @import("curses.zig");
 const entities = @import("entities.zig");
 const readline = @import("readline.zig");
 const RestClient = @import("RestClient.zig");
 const std = @import("std");
+const Timeline = @import("Timeline.zig");
 
 const paramsString =
     \\-h, --help  Display help and exit.
@@ -63,18 +65,14 @@ fn handleArguments() !void {
     }
 }
 
-fn printHome(writer: anytype, rest: *RestClient) !void {
+fn getHomeTimeline(rest: *RestClient) !Timeline {
     // if command is home, then for testing, print 10 home timeline statuses
     const statuses = try rest.get([]entities.Status, "/api/v1/timelines/home?limit=10");
-    defer std.json.parseFree([]entities.Status, statuses, .{ .allocator = rest.allocator });
-
-    for (statuses) |status| {
-        try status.print(writer);
-        try writer.writeAll("\n");
-    }
+    errdefer std.json.parseFree([]entities.Status, statuses, .{ .allocator = rest.allocator });
+    return try Timeline.init(rest.allocator, statuses);
 }
 
-const ui = @import("ui.zig");
+const UI = @import("UI.zig");
 
 pub fn main() !void {
     // we must be in interactive mode
@@ -96,40 +94,56 @@ pub fn main() !void {
     var rest = try config.createRestClient(allocator);
     defer rest.deinit();
 
-    try ui.initUi(allocator);
-    defer ui.deinitUi();
+    var my_ui = try UI.initUi(allocator);
+    defer my_ui.deinitUi();
+    my_ui.setupReadline();
 
-    ui.ui.msg.erase();
+    my_ui.msg.erase();
 
-    try ui.ui.msg.moveCursor(0, 0);
-
-    try ui.ui.msg.writer().writeAll(
-        \\mastty - Copyright (C) 2022 spazzylemons
-        \\This program comes with ABSOLUTELY NO WARRANTY; see the
-        \\GNU General Public License for more details.
-        \\
-    );
-    ui.ui.msg.refresh();
+    try my_ui.msg.moveCursor(0, 0);
+    my_ui.msg.refresh();
 
     const acct = try rest.get(entities.Account, "/api/v1/accounts/verify_credentials");
     defer acct.deinit(rest.allocator);
 
-    try ui.ui.msg.writer().print("hello, {s}!\n", .{acct.username});
-    ui.ui.msg.refresh();
+    try my_ui.sep.moveCursor(0, 0);
+    try my_ui.sep.writer().print("hello, {s}!", .{ acct.username });
+    my_ui.sep.refresh();
 
-    while (try ui.ui.getLine()) |command| {
+    var timeline: ?Timeline = null;
+    defer if (timeline) |tl| tl.deinit();
+    var timeline_offset: c_int = 0;
+
+    while (try my_ui.getLine()) |command| {
         defer allocator.free(command);
 
         if (std.mem.eql(u8, command, "exit")) {
             // if command is exit, then quit
             break;
         } else if (std.mem.eql(u8, command, "home")) {
-            printHome(ui.ui.msg.writer(), &rest) catch |err| {
-                try ui.ui.msg.writer().print("error: {s}\n", .{ @errorName(err) });
-            };
-            ui.ui.msg.refresh();
+            if (getHomeTimeline(&rest)) |tl| {
+                if (timeline) |old_tl| old_tl.deinit();
+                timeline = tl;
+                timeline_offset = 0;
+            } else |err| {
+                try my_ui.sep.moveCursor(0, 0);
+                try my_ui.sep.writer().print("error: {s}", .{ @errorName(err) });
+                my_ui.sep.refresh();
+            }
+        } else if (std.mem.eql(u8, command, "up")) {
+            // TODO shortcut keys
+            timeline_offset -= 1;
+        } else if (std.mem.eql(u8, command, "down")) {
+            // TODO shortcut keys
+            timeline_offset += 1;
         } else {
             // TODO help system
+        }
+
+        // TODO rerender only when needed?
+        // and also rerender on resize
+        if (timeline) |tl| {
+            try tl.render(my_ui.msg, timeline_offset, my_ui.msg.getMaxY());
         }
     }
 }

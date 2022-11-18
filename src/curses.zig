@@ -56,10 +56,21 @@ pub const Window = struct {
         return c.wgetch(self.ptr);
     }
 
-    fn addString(self: Window, msg: []const u8) !void {
+    pub fn addString(self: Window, msg: []const u8) !void {
+        // don't add the empty string
+        if (msg.len == 0) return;
+        // otherwise, safe to add
         if (c.waddnstr(self.ptr, msg.ptr, @intCast(c_int, msg.len)) == c.ERR) {
             return error.CursesError;
         }
+    }
+
+    pub fn getMaxY(self: Window) c_int {
+        return c.getmaxy(self.ptr);
+    }
+
+    pub fn getMaxX(self: Window) c_int {
+        return c.getmaxx(self.ptr);
     }
 
     fn write(self: Window, buf: []const u8) error{CursesError}!usize {
@@ -91,6 +102,11 @@ pub const Window = struct {
         if (c.clearok(self.ptr, value) == c.ERR) {
             return error.CursesError;
         }
+    }
+
+    pub fn scroll(self: Window, delta: c_int) void {
+        // assume scrollok is enabled
+        _ = c.wscrl(self.ptr, delta);
     }
 };
 
